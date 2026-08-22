@@ -1,0 +1,9 @@
+# SwiftPM build artifacts
+.build/
+.swiftpm/
+
+# Built helper binary (if copied here for bundling)
+bridge
+
+# macOS
+.DS_Store
