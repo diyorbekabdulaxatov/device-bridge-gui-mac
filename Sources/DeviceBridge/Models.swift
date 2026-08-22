@@ -51,3 +51,9 @@ struct ChatMessage: Identifiable {
     let text: String
     let time: Date
 }
+
+struct PairRequest: Identifiable {
+    let id = UUID()
+    let deviceId: String
+    let name: String
+}

@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
     @Published var paired: [PairedPeer] = []
     @Published var messages: [ChatMessage] = []
     @Published var history: [HistoryEntry] = []
+    @Published var pendingPair: PairRequest?
 
     private let client = BridgeClient()
     private var helper: Process?
@@ -104,6 +105,20 @@ final class AppState: ObservableObject {
               let obj = try? JSONSerialization.jsonObject(with: result) as? [String: Any],
               let sent = obj["sent"] as? NSNumber else { return "?" }
         return "\(sent.int64Value)"
+    }
+
+    func respondToPair(accept: Bool) {
+        guard let p = pendingPair else { return }
+        client.request("pair_respond", params: ["device_id": p.deviceId, "accept": accept]) { _, _ in
+            DispatchQueue.main.async {
+                if accept {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                        self?.refreshPaired()
+                    }
+                }
+            }
+        }
+        pendingPair = nil
     }
 
     func refreshPeers() {
@@ -216,8 +231,7 @@ final class AppState: ObservableObject {
             let name = data["name"] as? String ?? ""
             let id = data["device_id"] as? String ?? ""
             status = "Incoming pair request from \(name)"
-            messages.append(ChatMessage(from: id, text: "Pair request from \(name)", time: Date()))
-            refreshPaired()
+            pendingPair = PairRequest(deviceId: id, name: name)
         case "message_received":
             let from = data["from"] as? String ?? ""
             let text = data["text"] as? String ?? ""

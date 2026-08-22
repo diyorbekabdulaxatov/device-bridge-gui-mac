@@ -23,6 +23,14 @@ struct ContentView: View {
         .frame(minWidth: 540, minHeight: 620)
         .onAppear { state.start() }
         .onDisappear { state.stop() }
+        .alert(item: $state.pendingPair) { request in
+            Alert(
+                title: Text("Pairing request"),
+                message: Text("Allow \"\(request.name)\" to pair with this Mac?"),
+                primaryButton: .default(Text("Accept")) { state.respondToPair(accept: true) },
+                secondaryButton: .cancel(Text("Reject")) { state.respondToPair(accept: false) }
+            )
+        }
     }
 
     private var header: some View {
