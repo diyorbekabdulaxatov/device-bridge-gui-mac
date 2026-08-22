@@ -26,12 +26,17 @@ final class AppState: ObservableObject {
             .appendingPathComponent("DeviceBridge", isDirectory: true).path
         try? FileManager.default.createDirectory(atPath: dataDir, withIntermediateDirectories: true)
 
+        let receiveDir = FileManager.default
+            .urls(for: .downloadsDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("DeviceBridge", isDirectory: true).path
+        try? FileManager.default.createDirectory(atPath: receiveDir, withIntermediateDirectories: true)
+
         socketPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("devicebridge-\(UUID().uuidString).sock").path
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: locateHelperBinary())
-        p.arguments = ["-name", name, "-dir", dataDir, "-ipc", socketPath]
+        p.arguments = ["-name", name, "-dir", dataDir, "-ipc", socketPath, "-receive-dir", receiveDir]
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
         do {
@@ -44,6 +49,9 @@ final class AppState: ObservableObject {
 
         client.eventHandler = { [weak self] event, data in
             DispatchQueue.main.async { self?.handle(event: event, data: data) }
+        }
+        client.onDisconnect = { [weak self] in
+            DispatchQueue.main.async { self?.handleDisconnect() }
         }
 
         connectWithRetry()
@@ -74,6 +82,28 @@ final class AppState: ObservableObject {
                 if let err { self.status = "Send failed: \(err)" }
             }
         }
+    }
+
+    func sendFile(_ path: String, to peer: Peer) {
+        let name = (path as NSString).lastPathComponent
+        client.request("send_file", params: ["device_id": peer.deviceId, "addr": peer.addr, "path": path]) { result, err in
+            DispatchQueue.main.async {
+                if let err {
+                    self.status = "Send file failed: \(err)"
+                } else {
+                    let sent = self.sentBytes(from: result)
+                    self.status = "Sent \(name) to \(peer.name)"
+                    self.messages.append(ChatMessage(from: "", text: "Sent \(name) (\(sent) bytes)", time: Date()))
+                }
+            }
+        }
+    }
+
+    private func sentBytes(from result: Data?) -> String {
+        guard let result,
+              let obj = try? JSONSerialization.jsonObject(with: result) as? [String: Any],
+              let sent = obj["sent"] as? NSNumber else { return "?" }
+        return "\(sent.int64Value)"
     }
 
     func refreshPeers() {
@@ -164,6 +194,12 @@ final class AppState: ObservableObject {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (out?.isEmpty ?? true) ? nil : out
+    }
+
+    private func handleDisconnect() {
+        guard started else { return }
+        status = "Disconnected — helper stopped"
+        peers = []
     }
 
     private func handle(event: String, data: [String: Any]) {        switch event {

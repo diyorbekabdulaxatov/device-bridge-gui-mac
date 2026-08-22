@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var state: AppState
@@ -133,11 +134,26 @@ struct ContentView: View {
                 .onSubmit { send() }
             Button("Send", action: send)
                 .disabled(messageText.isEmpty || selectedPeerID.isEmpty)
+            Button(action: chooseAndSendFile) {
+                Image(systemName: "paperclip")
+            }
+            .help("Send a file")
+            .disabled(selectedPeerID.isEmpty)
         }
         .padding(12)
         .onReceive(state.$peers) { _ in autoSelect() }
         .onReceive(state.$paired) { _ in autoSelect() }
         .onAppear { autoSelect() }
+    }
+
+    private func chooseAndSendFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let peer = state.peers.first(where: { $0.deviceId == selectedPeerID }) else { return }
+        state.sendFile(url.path, to: peer)
     }
 
     private var sendablePeers: [Peer] {

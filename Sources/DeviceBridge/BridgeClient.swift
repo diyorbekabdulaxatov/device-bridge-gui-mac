@@ -20,6 +20,7 @@ final class BridgeClient {
     typealias ResponseHandler = (Data?, String?) -> Void
 
     var eventHandler: ((String, [String: Any]) -> Void)?
+    var onDisconnect: (() -> Void)?
 
     private var socketFd: Int32 = -1
     private var source: DispatchSourceRead?
@@ -111,7 +112,12 @@ final class BridgeClient {
     private func readAvailable() {
         var tmp = [UInt8](repeating: 0, count: 8192)
         let n = Darwin.read(socketFd, &tmp, tmp.count)
-        if n <= 0 { return }
+        if n <= 0 {
+            source?.cancel()
+            source = nil
+            onDisconnect?()
+            return
+        }
         buffer.append(contentsOf: tmp[0..<n])
 
         while let idx = buffer.firstIndex(of: 0x0A) {
