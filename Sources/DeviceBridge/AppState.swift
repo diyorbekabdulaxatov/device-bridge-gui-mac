@@ -265,6 +265,8 @@ final class AppState: ObservableObject {
             let sent = (data["sent"] as? NSNumber)?.int64Value ?? 0
             let total = (data["total"] as? NSNumber)?.int64Value ?? 0
             updateTransfer(name: name, sent: sent, total: total)
+        case "clipboard_updated":
+            refreshHistory()
         default:
             break
         }
