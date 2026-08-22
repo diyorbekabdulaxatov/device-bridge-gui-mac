@@ -10,6 +10,7 @@ final class AppState: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var history: [HistoryEntry] = []
     @Published var pendingPair: PairRequest?
+    @Published var transfers: [TransferProgress] = []
 
     private let client = BridgeClient()
     private var helper: Process?
@@ -37,7 +38,7 @@ final class AppState: ObservableObject {
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: locateHelperBinary())
-        p.arguments = ["-name", name, "-dir", dataDir, "-ipc", socketPath, "-receive-dir", receiveDir]
+        p.arguments = ["-name", name, "-dir", dataDir, "-ipc", socketPath, "-receive-dir", receiveDir, "-clipboard"]
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
         do {
@@ -131,6 +132,22 @@ final class AppState: ObservableObject {
 
     func refreshHistory() {
         request("history_list", params: ["limit": 50], as: [HistoryEntry].self) { [weak self] in self?.history = $0 ?? [] }
+    }
+
+    func searchHistory(_ query: String) {
+        if query.isEmpty {
+            refreshHistory()
+            return
+        }
+        request("history_search", params: ["query": query, "limit": 50], as: [HistoryEntry].self) { [weak self] in self?.history = $0 ?? [] }
+    }
+
+    func copyToClipboard(_ text: String) {
+        client.request("set_clipboard", params: ["text": text]) { _, err in
+            DispatchQueue.main.async {
+                if let err { self.status = "Copy failed: \(err)" }
+            }
+        }
     }
 
     // MARK: - Internals
@@ -242,8 +259,28 @@ final class AppState: ObservableObject {
             let path = data["path"] as? String ?? ""
             status = "Received file \(name)"
             messages.append(ChatMessage(from: "", text: "Received file \(name) at \(path)", time: Date()))
+            refreshHistory()
+        case "file_progress":
+            let name = data["name"] as? String ?? ""
+            let sent = (data["sent"] as? NSNumber)?.int64Value ?? 0
+            let total = (data["total"] as? NSNumber)?.int64Value ?? 0
+            updateTransfer(name: name, sent: sent, total: total)
         default:
             break
+        }
+    }
+
+    private func updateTransfer(name: String, sent: Int64, total: Int64) {
+        let item = TransferProgress(name: name, sent: sent, total: total)
+        if let idx = transfers.firstIndex(where: { $0.name == name }) {
+            transfers[idx] = item
+        } else {
+            transfers.append(item)
+        }
+        if sent >= total {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.transfers.removeAll { $0.name == name }
+            }
         }
     }
 }

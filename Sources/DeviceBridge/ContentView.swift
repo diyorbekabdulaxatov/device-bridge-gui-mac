@@ -5,6 +5,7 @@ struct ContentView: View {
     @EnvironmentObject var state: AppState
     @State private var messageText = ""
     @State private var selectedPeerID = ""
+    @State private var historySearch = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,6 +14,7 @@ struct ContentView: View {
             List {
                 nearbySection
                 pairedSection
+                transfersSection
                 messagesSection
                 historySection
             }
@@ -95,6 +97,21 @@ struct ContentView: View {
         }
     }
 
+    private var transfersSection: some View {
+        Group {
+            if !state.transfers.isEmpty {
+                Section("Transfers") {
+                    ForEach(state.transfers) { t in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(t.name).font(.caption)
+                            ProgressView(value: t.fraction)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var messagesSection: some View {
         Section("Messages") {
             if state.messages.isEmpty {
@@ -115,11 +132,22 @@ struct ContentView: View {
 
     private var historySection: some View {
         Section("Clipboard history") {
+            TextField("Search history", text: $historySearch)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: historySearch) { _, _ in state.searchHistory(historySearch) }
             if state.history.isEmpty {
                 Text("Empty").foregroundColor(.secondary)
             } else {
                 ForEach(state.history) { h in
-                    Text(h.text).lineLimit(2)
+                    Button {
+                        state.copyToClipboard(h.text)
+                    } label: {
+                        Text(h.text)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy to clipboard")
                 }
             }
         }

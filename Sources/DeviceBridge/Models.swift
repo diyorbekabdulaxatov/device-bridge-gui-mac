@@ -57,3 +57,11 @@ struct PairRequest: Identifiable {
     let deviceId: String
     let name: String
 }
+
+struct TransferProgress: Identifiable {
+    var id: String { name }
+    let name: String
+    let sent: Int64
+    let total: Int64
+    var fraction: Double { total > 0 ? Double(sent) / Double(total) : 0 }
+}
